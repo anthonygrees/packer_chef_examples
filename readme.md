@@ -74,3 +74,54 @@ The reference of available configuration options is listed below. No configurati
 ```validation_client_name``` (string) - Name of the validation client. If not set, this won't be set in the configuration and the default that Chef uses will be used.
 
 ```validation_key_path``` (string) - Path to the validation key for communicating with the Chef Server. This will be uploaded to the remote machine. If this is NOT set, then it is your responsibility via other means (shell provisioner, etc.) to get a validation key to where Chef expects it.
+
+### Chef Client Local Mode - Passing variables
+The following example shows how to run the chef-client provisioner in local mode, while passing a run_list using a variable.
+
+#### Local environment variables
+```
+# Machine's Chef directory
+export PACKER_CHEF_DIR=/var/chef-packer
+# Comma separated run_list
+export PACKER_CHEF_RUN_LIST="recipe[apt],recipe[nginx]"
+```
+#### Packer variables
+
+Set the necessary Packer variables using environment variables or provide a var file.
+```
+"variables": {
+  "chef_dir": "{{env `PACKER_CHEF_DIR`}}",
+  "chef_run_list": "{{env `PACKER_CHEF_RUN_LIST`}}",
+  "chef_client_config_tpl": "{{env `PACKER_CHEF_CLIENT_CONFIG_TPL`}}",
+  "packer_chef_bootstrap_dir": "{{env `PACKER_CHEF_BOOTSTRAP_DIR`}}" ,
+  "packer_uid": "{{env `PACKER_UID`}}",
+  "packer_gid": "{{env `PACKER_GID`}}"
+}
+```
+#### Setup the chef-client provisioner
+
+Make sure we have the correct directories and permissions for the chef-client provisioner. You will need to bootstrap the Chef run by providing the necessary cookbooks using Berkshelf or some other means.
+```
+{
+  "type": "file",
+  "source": "{{user `packer_chef_bootstrap_dir`}}",
+  "destination": "/tmp/bootstrap"
+},
+{
+  "type": "shell",
+  "inline": [
+    "sudo mkdir -p {{user `chef_dir`}}",
+    "sudo mkdir -p /tmp/packer-chef-client",
+    "sudo chown {{user `packer_uid`}}.{{user `packer_gid`}} /tmp/packer-chef-client",
+    "sudo sh /tmp/bootstrap/bootstrap.sh"
+  ]
+},
+{
+  "type": "chef-client",
+  "server_url": "http://localhost:8889",
+  "config_template": "{{user `chef_client_config_tpl`}}/client.rb.tpl",
+  "skip_clean_node": true,
+  "skip_clean_client": true,
+  "run_list": "{{user `chef_run_list`}}"
+}
+```
